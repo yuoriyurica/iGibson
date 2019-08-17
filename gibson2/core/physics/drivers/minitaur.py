@@ -56,7 +56,7 @@ class MinitaurBase(WalkerBase):
     """The minitaur class that simulates a quadruped robot from Ghost Robotics.
     """
 
-    def __init__(self, config, env=None, pd_control_enabled=True,
+    def __init__(self, config, pd_control_enabled=True,
                  accurate_motor_model_enabled=True):
         """Constructs a minitaur and reset it to the initial states.
 
@@ -84,17 +84,6 @@ class MinitaurBase(WalkerBase):
         self.robot_name = "base_chassis_link"
         scale = config["robot_scale"] if "robot_scale" in config.keys() else self.default_scale
 
-        WalkerBase.__init__(self,
-                            "quadruped/minitaur.urdf",
-                            self.robot_name,
-                            action_dim=8,
-                            sensor_dim=self.OBSERVATION_DIM,
-                            power=5,
-                            scale=scale,
-                            initial_pos=config['initial_pos'],
-                            target_pos=config["target_pos"],
-                            resolution=config["resolution"],
-                            env=env)
 
         self.r_f = 0.1
         self.time_step = config["speed"]["timestep"]
@@ -114,31 +103,52 @@ class MinitaurBase(WalkerBase):
             self._kp = 1
             self._kd = 1
 
-        if config["is_discrete"]:
-            self.action_space = gym.spaces.Discrete(17)
-            self.torque = 10
-            ## Hip_1, Ankle_1, Hip_2, Ankle_2, Hip_3, Ankle_3, Hip_4, Ankle_4
-            self.action_list = [[self.r_f * self.torque, 0, 0, 0, 0, 0, 0, 0],
-                                [0, self.r_f * self.torque, 0, 0, 0, 0, 0, 0],
-                                [0, 0, self.r_f * self.torque, 0, 0, 0, 0, 0],
-                                [0, 0, 0, self.r_f * self.torque, 0, 0, 0, 0],
-                                [0, 0, 0, 0, self.r_f * self.torque, 0, 0, 0],
-                                [0, 0, 0, 0, 0, self.r_f * self.torque, 0, 0],
-                                [0, 0, 0, 0, 0, 0, self.r_f * self.torque, 0],
-                                [0, 0, 0, 0, 0, 0, 0, self.r_f * self.torque],
-                                [-self.r_f * self.torque, 0, 0, 0, 0, 0, 0, 0],
-                                [0, -self.r_f * self.torque, 0, 0, 0, 0, 0, 0],
-                                [0, 0, -self.r_f * self.torque, 0, 0, 0, 0, 0],
-                                [0, 0, 0, -self.r_f * self.torque, 0, 0, 0, 0],
-                                [0, 0, 0, 0, -self.r_f * self.torque, 0, 0, 0],
-                                [0, 0, 0, 0, 0, -self.r_f * self.torque, 0, 0],
-                                [0, 0, 0, 0, 0, 0, -self.r_f * self.torque, 0],
-                                [0, 0, 0, 0, 0, 0, 0, -self.r_f * self.torque],
-                                [0, 0, 0, 0, 0, 0, 0, 0]]
-            self.setup_keys_to_action()
+
         self.debug_count = 0
         self.qmax = [0] * 8
         self.fmax = [0] * 8
+
+        WalkerBase.__init__(self,
+                            "quadruped/minitaur.urdf",
+                            self.robot_name,
+                            action_dim=8,
+                            sensor_dim=self.OBSERVATION_DIM,
+                            power=5,
+                            scale=scale,
+                            resolution=config["resolution"],
+                            )
+
+
+
+    def set_up_discrete_action_space(self):
+        self.action_space = gym.spaces.Discrete(17)
+        self.torque = 10
+        ## Hip_1, Ankle_1, Hip_2, Ankle_2, Hip_3, Ankle_3, Hip_4, Ankle_4
+        self.action_list = [[self.r_f * self.torque, 0, 0, 0, 0, 0, 0, 0],
+                            [0, self.r_f * self.torque, 0, 0, 0, 0, 0, 0],
+                            [0, 0, self.r_f * self.torque, 0, 0, 0, 0, 0],
+                            [0, 0, 0, self.r_f * self.torque, 0, 0, 0, 0],
+                            [0, 0, 0, 0, self.r_f * self.torque, 0, 0, 0],
+                            [0, 0, 0, 0, 0, self.r_f * self.torque, 0, 0],
+                            [0, 0, 0, 0, 0, 0, self.r_f * self.torque, 0],
+                            [0, 0, 0, 0, 0, 0, 0, self.r_f * self.torque],
+                            [-self.r_f * self.torque, 0, 0, 0, 0, 0, 0, 0],
+                            [0, -self.r_f * self.torque, 0, 0, 0, 0, 0, 0],
+                            [0, 0, -self.r_f * self.torque, 0, 0, 0, 0, 0],
+                            [0, 0, 0, -self.r_f * self.torque, 0, 0, 0, 0],
+                            [0, 0, 0, 0, -self.r_f * self.torque, 0, 0, 0],
+                            [0, 0, 0, 0, 0, -self.r_f * self.torque, 0, 0],
+                            [0, 0, 0, 0, 0, 0, -self.r_f * self.torque, 0],
+                            [0, 0, 0, 0, 0, 0, 0, -self.r_f * self.torque],
+                            [0, 0, 0, 0, 0, 0, 0, 0]]
+
+    def set_up_continuous_action_space(self):
+        self.action_space = gym.spaces.Box(shape=(self.action_dim, ),
+                                           low=-1.0,
+                                           high=1.0,
+                                           dtype=np.float32)
+        self.action_high = self.torque * np.ones([self.action_dim])
+        self.action_low = -self.action_high
 
     def _RecordMassInfoFromURDF(self):
         self._base_mass_urdf = p.getDynamicsInfo(self.minitaur, self.BASE_LINK_ID)[0]
@@ -577,8 +587,8 @@ class Minitaur(MinitaurBase):
         self.addToScene()
     '''
 
-    def __init__(self, config, env, pd_control_enabled=True, accurate_motor_model_enabled=True):
-        MinitaurBase.__init__(self, config, env, pd_control_enabled, accurate_motor_model_enabled)
+    def __init__(self, config, pd_control_enabled=True, accurate_motor_model_enabled=True):
+        MinitaurBase.__init__(self, config, pd_control_enabled, accurate_motor_model_enabled)
 
     def calc_state(self):
         MinitaurBase.GetObservation(self)

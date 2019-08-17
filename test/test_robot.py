@@ -1,5 +1,6 @@
 import yaml
 from gibson2.core.physics.robot_locomotors import Turtlebot, Husky, Ant, Humanoid, JR2, JR2_Kinova, Quadrotor
+from gibson2.core.physics.drivers.minitaur import Minitaur
 from gibson2.core.simulator import Simulator
 from gibson2.core.physics.scene import BuildingScene, StadiumScene
 from gibson2.utils.utils import parse_config
@@ -20,6 +21,18 @@ def test_turtlebot():
     s.disconnect()
     assert nbody == 5
 
+def test_minitaur():
+    s = Simulator(mode='gui')
+    scene = StadiumScene()
+    s.import_scene(scene)
+    config = parse_config('test_continuous.yaml')
+    m = Minitaur(config)
+    s.import_robot(m)
+    nbody = p.getNumBodies()
+
+    for i in range(10000):
+        s.step()
+    s.disconnect()
 
 def test_jr2():
     s = Simulator(mode='headless')
