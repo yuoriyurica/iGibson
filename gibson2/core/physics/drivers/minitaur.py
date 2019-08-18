@@ -19,6 +19,10 @@ class MinitaurBase(WalkerBase):
     model_type = "URDF"
     default_scale = 1
 
+    INIT_POSITION = [0, 0, .2]
+    INIT_RACK_POSITION = [0, 0, 1]
+    INIT_ORIENTATION = [0, 0, 0, 1]
+
     KNEE_CONSTRAINT_POINT_RIGHT = [0, 0.005, 0.2]
     KNEE_CONSTRAINT_POINT_LEFT = [0, 0.01, 0.2]
     OVERHEAT_SHUTDOWN_TORQUE = 2.45
@@ -51,7 +55,7 @@ class MinitaurBase(WalkerBase):
     motor_direction = [-1, -1, -1, -1, 1, 1, 1, 1]
     observed_motor_torques = np.zeros(num_motors)
     applied_motor_torques = np.zeros(num_motors)
-    max_force = 5.5
+    max_force = 3.5
     joint_name_to_id = None
     """The minitaur class that simulates a quadruped robot from Ghost Robotics.
     """
@@ -119,6 +123,11 @@ class MinitaurBase(WalkerBase):
                             )
 
 
+    def _load_model(self):
+        ids =  super(MinitaurBase, self)._load_model()
+        p.resetBasePositionAndOrientation(ids[0], self.INIT_POSITION, self.INIT_ORIENTATION)
+        self.robot_specific_reset()
+        return ids
 
     def set_up_discrete_action_space(self):
         self.action_space = gym.spaces.Discrete(17)
@@ -156,6 +165,22 @@ class MinitaurBase(WalkerBase):
         self._leg_masses_urdf.append(p.getDynamicsInfo(self.minitaur, self.LEG_LINK_ID[0])[0])
         self._leg_masses_urdf.append(p.getDynamicsInfo(self.minitaur, self.MOTOR_LINK_ID[0])[0])
 
+    def _RecordInertiaInfoFromURDF(self):
+        """Record the inertia of each body from URDF file."""
+        self._link_urdf = []
+        num_bodies = p.getNumJoints(self.quadruped)
+        for body_id in range(-1, num_bodies):  # -1 is for the base link.
+            inertia = p.getDynamicsInfo(self.quadruped, body_id)[2]
+            self._link_urdf.append(inertia)
+        # We need to use id+1 to index self._link_urdf because it has the base
+        # (index = -1) at the first element.
+        self._base_inertia_urdf = [
+            self._link_urdf[chassis_id + 1] for chassis_id in self._chassis_link_ids
+        ]
+        self._leg_inertia_urdf = [self._link_urdf[leg_id + 1] for leg_id in self._leg_link_ids]
+        self._leg_inertia_urdf.extend(
+            [self._link_urdf[motor_id + 1] for motor_id in self._motor_link_ids])
+
     def _BuildJointNameToIdDict(self):
         num_joints = p.getNumJoints(self.minitaur)
         self.joint_name_to_id = {}
@@ -166,7 +191,7 @@ class MinitaurBase(WalkerBase):
     def _BuildMotorIdList(self):
         self._motor_id_list = [self.joint_name_to_id[motor_name] for motor_name in self.MOTOR_NAMES]
 
-    def robot_specific_reset(self, reload_urdf=True):
+    def robot_specific_reset(self):
         """Reset the minitaur to its initial states.
 
         Args:
