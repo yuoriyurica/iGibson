@@ -1,8 +1,11 @@
 #version 450
 uniform mat4 V;
+uniform mat4 next_V;
 uniform mat4 P;
 uniform mat4 pose_rot;
 uniform mat4 pose_trans;
+uniform mat4 next_pose_rot;
+uniform mat4 next_pose_trans;
 uniform vec3 instance_color;
 uniform vec3 diffuse_color;
 
@@ -16,8 +19,10 @@ out vec3 Normal_cam;
 out vec3 Instance_color;
 out vec3 Pos_cam;
 out vec3 Diffuse_color;
+out vec2 optical_flow;
 void main() {
     gl_Position = P * V * pose_trans * pose_rot * vec4(position, 1);
+    vec4 next_gl_Position = P * next_V * next_pose_trans * next_pose_rot * vec4(position, 1);
     vec4 world_position4 = pose_trans * pose_rot * vec4(position, 1);
     FragPos = vec3(world_position4.xyz / world_position4.w); // in world coordinate
     Normal = normalize(mat3(pose_rot) * normal); // in world coordinate
@@ -27,4 +32,5 @@ void main() {
     theCoords = texCoords;
     Instance_color = instance_color;
     Diffuse_color = diffuse_color;
+    optical_flow = gl_Position.xy / gl_Position.w - next_gl_Position.xy / next_gl_Position.w;
 }
