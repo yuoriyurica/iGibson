@@ -1,12 +1,13 @@
 # scene
 scene: building
-model_id: Rs
+model_id: Allensville
 is_interactive: false
 build_graph: true
 load_texture: true
 pybullet_load_texture: true
 trav_map_resolution: 0.1
-trav_map_erosion: 2
+trav_map_erosion: 3
+num_waypoints: 10
 
 # robot
 robot: Turtlebot
@@ -45,7 +46,7 @@ output: [sensor, rgb, depth, scan]
 fisheye: false
 image_width: 640
 image_height: 480
-vertical_fov: 45
+vertical_fov: 90
 # depth
 depth_low: 0.8
 depth_high: 3.5

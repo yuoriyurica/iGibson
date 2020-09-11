@@ -16,6 +16,9 @@ import cv2
 import time
 import collections
 import logging
+import csv
+import math
+from pyquaternion import Quaternion
 
 
 class NavigateEnv(BaseEnv):
@@ -930,6 +933,124 @@ class NavigateRandomEnvSim2Real(NavigateRandomEnv):
 
         return state
 
+
+class HotspotTravEnv(NavigateRandomEnv):
+    def __init__(
+            self,
+            config_file,
+            model_id=None,
+            mode='headless',
+            action_timestep=1 / 10.0,
+            physics_timestep=1 / 240.0,
+            automatic_reset=False,
+            random_height=False,
+            device_idx=0,
+            render_to_tensor=False
+    ):
+        """
+        :param config_file: config_file path
+        :param model_id: override model_id in config file
+        :param mode: headless or gui mode
+        :param action_timestep: environment executes action per action_timestep second
+        :param physics_timestep: physics timestep for pybullet
+        :param automatic_reset: whether to automatic reset after an episode finishes
+        :param random_height: whether to randomize height for target position (for reaching task)
+        :param device_idx: device_idx: which GPU to run the simulation and rendering on
+        """
+        super(HotspotTravEnv, self).__init__(config_file,
+                                                model_id=model_id,
+                                                mode=mode,
+                                                action_timestep=action_timestep,
+                                                physics_timestep=physics_timestep,
+                                                automatic_reset=automatic_reset,
+                                                random_height=False,
+                                                device_idx=device_idx,
+                                                render_to_tensor=render_to_tensor)
+
+        self.load_hotspot(model_id)
+    
+    def load_hotspot(self, model_id):
+        floor_count = len(self.scene.floors)
+        self.hotspots = [[] * floor_count]
+        model_id = 'Allensville'
+        csv_path = os.path.join('/home/cgvlab711/gibson_tiny', model_id, 'camera_poses.csv')
+        with open(csv_path, newline='') as csvfile:
+            reader = csv.reader(csvfile, skipinitialspace=True)
+            for row in reader:
+                point = row[0]
+                pos = np.array(row[1:4]).astype(np.float)
+                orn = np.array(row[4:8]).astype(np.float)
+
+                z = pos[2]
+                floor = floor_count - 1
+                for i in range(floor_count - 1):
+                    if (self.scene.floors[i] <= pos[2] and pos[2] < self.scene.floors[i+1]):
+                        floor = i
+
+                self.hotspots[floor].append([point, pos, orn])
+
+    def get_random_hotspot_floor(self, floor):
+        idx = np.random.randint(0, high=len(self.hotspots[floor]))
+        x, y = self.hotspots[floor][idx][1][0], self.hotspots[floor][idx][1][1]
+        z = self.scene.floors[floor]
+        return floor, np.array([x, y, z])
+
+    def get_orientation(self):
+        return self.robots[0].get_orientation()
+
+    def step(self, action):
+        """
+        apply robot's action and get state, reward, done and info, following OpenAI gym's convention
+        :param action: a list of control signals
+        :return: state, reward, done, info
+        """
+        self.current_step += 1
+        if action[0] is not None:
+            self.robots[0].set_position(action[0])
+
+        if action[1] is not None:
+            self.robots[0].set_orientation(action[1])
+
+        cache = self.before_simulation()
+        collision_links = self.run_simulation()
+        self.after_simulation(cache, collision_links)
+
+        state = self.get_state(collision_links)
+        info = {}
+        reward, info = self.get_reward(collision_links, action, info)
+        done, info = self.get_termination(collision_links, action, info)
+        self.step_visualization()
+
+        if done and self.automatic_reset:
+            info['last_observation'] = state
+            state = self.reset()
+        return state, reward, done, info
+
+    def reset_initial_and_target_pos(self):
+        """
+        Reset initial_pos, initial_orn and target_pos through randomization
+        The geodesic distance (or L2 distance if traversable map graph is not built)
+        between initial_pos and target_pos has to be between [self.target_dist_min, self.target_dist_max]
+        """
+        _, self.initial_pos = self.get_random_hotspot_floor(self.floor_num)
+        max_trials = 100
+        dist = 0.0
+        for _ in range(max_trials):
+            _, self.target_pos = self.get_random_hotspot_floor(self.floor_num)
+            if self.scene.build_graph:
+                path, dist = self.get_shortest_path(from_initial_pos=True)
+            else:
+                dist = l2_distance(self.initial_pos, self.target_pos)
+            if self.target_dist_min < dist < self.target_dist_max:
+                break
+        if not (self.target_dist_min < dist < self.target_dist_max):
+            print("WARNING: Failed to sample initial and target positions")
+        
+        forward_vec = np.array([0.0, 1.0, 0.0])
+        predict_vec = np.array([path[5][0] - path[0][0], path[5][1] - path[0][1], 0.0])
+        rad = math.acos(np.dot(forward_vec, predict_vec / np.linalg.norm(predict_vec)))
+        quat = Quaternion(axis=(0.0, 0.0, 1.0), radians=rad)
+        self.initial_orn = np.array([0, 0, quat.radians])
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
