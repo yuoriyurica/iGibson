@@ -1051,8 +1051,8 @@ class HotspotTravEnv(NavigateRandomEnv):
         # rad = math.acos(np.dot(forward_vec, predict_vec / np.linalg.norm(predict_vec)))
         # quat = Quaternion(axis=(0.0, 0.0, 1.0), radians=rad)
         # self.initial_orn = np.array([0, 0, quat.radians])
-        # self.initial_orn = np.array([0, 0, np.random.uniform(0, np.pi * 2)])
-        self.initial_orn = np.array([0, 0, 0])
+        self.initial_orn = np.array([0, 0, np.random.uniform(0, np.pi * 2)])
+        # self.initial_orn = np.array([0, 0, np.pi])
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

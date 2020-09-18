@@ -235,8 +235,8 @@ class Instance(object):
                     [ 0, 0, 1],
                     # [-1, 0, 0], # dir = (0, 1, 0)
                     # [ 1, 0, 0], # dir = (0, 1, 0)
-                    [ 1, 0, 0], # dir = (1, 0, 0)
-                    [-1, 0, 0], # dir = (1, 0, 0)
+                    [ forward_dir[0], forward_dir[1], 0], # dir = (1, 0, 0)
+                    [-forward_dir[0],-forward_dir[1], 0], # dir = (1, 0, 0)
                     [ 0, 0, 1],
                     [ 0, 0, 1]]
 
