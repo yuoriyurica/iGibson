@@ -219,20 +219,24 @@ class Instance(object):
             self.renderer.r.render_softbody_instance(self.renderer.VAOs[object_idx], self.renderer.VBOs[object_idx], new_data)
 
 
-        print(self.renderer.target, self.renderer.camera)
+        print(self.renderer.camera, self.renderer.target, self.renderer.up)
         v_array = [] # posZ, negZ
         forward_dir = [self.renderer.target[0] - self.renderer.camera[0], self.renderer.target[1] - self.renderer.camera[1], self.renderer.target[2] - self.renderer.camera[2]]
-        target_array = [[self.renderer.camera[0] + forward_dir[0], self.renderer.camera[1] + forward_dir[1], self.renderer.camera[2]],
-                        [self.renderer.camera[0] - forward_dir[0], self.renderer.camera[1] - forward_dir[1], self.renderer.camera[2]],
-                        [self.renderer.camera[0] + forward_dir[0], self.renderer.camera[1], self.renderer.camera[2] - forward_dir[1]],
-                        [self.renderer.camera[0] - forward_dir[0], self.renderer.camera[1], self.renderer.camera[2] + forward_dir[1]],
+        target_array = [[self.renderer.camera[0] + forward_dir[1], self.renderer.camera[1] - forward_dir[0], self.renderer.camera[2]],
                         [self.renderer.camera[0] - forward_dir[1], self.renderer.camera[1] + forward_dir[0], self.renderer.camera[2]],
-                        [self.renderer.camera[0] + forward_dir[1], self.renderer.camera[1] - forward_dir[0], self.renderer.camera[2]]]
+                        # [self.renderer.camera[0], self.renderer.camera[1], self.renderer.camera[2] - 1], # dir = (0, 1, 0)
+                        # [self.renderer.camera[0], self.renderer.camera[1], self.renderer.camera[2] + 1], # dir = (0, 1, 0)
+                        [self.renderer.camera[0], self.renderer.camera[1], self.renderer.camera[2] - 1], # dir = (1, 0, 0)
+                        [self.renderer.camera[0], self.renderer.camera[1], self.renderer.camera[2] + 1], # dir = (1, 0, 0)
+                        [self.renderer.camera[0] + forward_dir[0], self.renderer.camera[1] + forward_dir[1], self.renderer.camera[2]],
+                        [self.renderer.camera[0] - forward_dir[0], self.renderer.camera[1] - forward_dir[1], self.renderer.camera[2]]]
         
         up_array = [[ 0, 0, 1],
                     [ 0, 0, 1],
-                    [-1, 0, 0],
-                    [ 1, 0, 0],
+                    # [-1, 0, 0], # dir = (0, 1, 0)
+                    # [ 1, 0, 0], # dir = (0, 1, 0)
+                    [ 1, 0, 0], # dir = (1, 0, 0)
+                    [-1, 0, 0], # dir = (1, 0, 0)
                     [ 0, 0, 1],
                     [ 0, 0, 1]]
 
