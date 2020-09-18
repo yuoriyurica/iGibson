@@ -361,8 +361,26 @@ public:
         glEnable(GL_DEPTH_TEST);
     }
 
-    void render_meshrenderer_post() {
+    void render_meshrenderer_post(int shaderProgram, int texture_id, int texUnitUniform, int vao, GLuint fb2) {
         glDisable(GL_DEPTH_TEST);
+  
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, texture_id);
+        // glBindTexture(GL_TEXTURE_2D, texture_id);
+
+        // float *ptr = (float*)malloc(4 * 512 * 512 * sizeof(float));
+        // glGetTexImage(GL_TEXTURE_CUBE_MAP_POSITIVE_X, 0, GL_RGBA, GL_FLOAT, ptr);
+        // std::cout << ptr[2] << '\n';
+
+        glUseProgram(shaderProgram);
+        glUniform1i(texUnitUniform, 0);
+        glBindVertexArray(vao);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, fb2);
+        glClearColor(1.0f, 1.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
     }
 
     std::string getstring_meshrenderer() {
@@ -385,6 +403,13 @@ public:
         glBindFramebuffer(GL_FRAMEBUFFER, fb2);
         if (!strcmp(mode, "rgb")) {
             glReadBuffer(GL_COLOR_ATTACHMENT0);
+            
+            // py::array_t<float> data = py::array_t<float>(4 * width * height);
+            // py::buffer_info buf = data.request();
+            // float* ptr = (float *) buf.ptr;
+            // glBindTexture(GL_TEXTURE_2D, 1);
+            // glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, ptr);
+            // return data;
         }
         else if (!strcmp(mode, "normal")) {
             glReadBuffer(GL_COLOR_ATTACHMENT1);
@@ -400,6 +425,31 @@ public:
             exit(EXIT_FAILURE);
         }
         py::array_t<float> data = py::array_t<float>(4 * width * height);
+        py::buffer_info buf = data.request();
+        float* ptr = (float *) buf.ptr;
+        glReadPixels(0, 0, width, height, GL_RGBA, GL_FLOAT, ptr);
+        return data;
+    }
+
+    py::array_t<float> readbuffer_meshrenderer_cubemap(char* mode, int width, int height, GLuint fb2) {
+        glBindFramebuffer(GL_FRAMEBUFFER, fb2);
+        if (!strcmp(mode, "rgb")) {
+            glReadBuffer(GL_COLOR_ATTACHMENT0);
+        }
+        else if (!strcmp(mode, "normal")) {
+            glReadBuffer(GL_COLOR_ATTACHMENT1);
+        }
+        else if (!strcmp(mode, "seg")) {
+            glReadBuffer(GL_COLOR_ATTACHMENT2);
+        }
+        else if (!strcmp(mode, "3d")) {
+            glReadBuffer(GL_COLOR_ATTACHMENT3);
+        }
+        else {
+            fprintf(stderr, "ERROR: Unknown buffer mode.\n");
+            exit(EXIT_FAILURE);
+        }
+        py::array_t<float> data = py::array_t<float>(4 * width * height); // 4(RGBA) * width * height
         py::buffer_info buf = data.request();
         float* ptr = (float *) buf.ptr;
         glReadPixels(0, 0, width, height, GL_RGBA, GL_FLOAT, ptr);
@@ -426,14 +476,38 @@ public:
         int color_tex_3d = texture_ptr[3];
         int depth_tex = texture_ptr[4];
         glBindTexture(GL_TEXTURE_2D, color_tex_rgb);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         glBindTexture(GL_TEXTURE_2D, color_tex_normal);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         glBindTexture(GL_TEXTURE_2D, color_tex_semantics);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         glBindTexture(GL_TEXTURE_2D, color_tex_3d);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         glBindTexture(GL_TEXTURE_2D, depth_tex);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, width, height, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color_tex_rgb, 0);
@@ -442,6 +516,87 @@ public:
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, color_tex_3d, 0);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, depth_tex, 0);
         glViewport(0, 0, width, height);
+        GLenum *bufs = (GLenum*)malloc(4 * sizeof(GLenum));
+        bufs[0] = GL_COLOR_ATTACHMENT0;
+        bufs[1] = GL_COLOR_ATTACHMENT1;
+        bufs[2] = GL_COLOR_ATTACHMENT2;
+        bufs[3] = GL_COLOR_ATTACHMENT3;
+        glDrawBuffers(4, bufs);
+        assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
+        py::list result;
+        result.append(fbo);
+        result.append(color_tex_rgb);
+        result.append(color_tex_normal);
+        result.append(color_tex_semantics);
+        result.append(color_tex_3d);
+        result.append(depth_tex);
+        return result;
+    }
+
+    py::list setup_framebuffer_meshrenderer_cubemap(int width, int height) {
+        GLuint *fbo_ptr = (GLuint*)malloc(sizeof(GLuint));
+        GLuint *texture_ptr = (GLuint*)malloc(5 * sizeof(GLuint));
+        glGenFramebuffers(1, fbo_ptr);
+        glGenTextures(5, texture_ptr);
+        int fbo = fbo_ptr[0];
+        int color_tex_rgb = texture_ptr[0];
+        int color_tex_normal = texture_ptr[1];
+        int color_tex_semantics = texture_ptr[2];
+        int color_tex_3d = texture_ptr[3];
+        int depth_tex = texture_ptr[4];
+        glBindTexture(GL_TEXTURE_CUBE_MAP, color_tex_rgb);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+        for (int i = 0; i < 6; i++) {
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        }
+        glBindTexture(GL_TEXTURE_CUBE_MAP, color_tex_normal);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+        for (int i = 0; i < 6; i++) {
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        }
+        glBindTexture(GL_TEXTURE_CUBE_MAP, color_tex_semantics);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+        for (int i = 0; i < 6; i++) {
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        }
+        glBindTexture(GL_TEXTURE_CUBE_MAP, color_tex_3d);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+        for (int i = 0; i < 6; i++) {
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        }
+        glBindTexture(GL_TEXTURE_CUBE_MAP, depth_tex);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+        for (int i = 0; i < 6; i++) {
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_DEPTH24_STENCIL8, 512, 512, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, color_tex_rgb, 0);
+        glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, color_tex_normal, 0);
+        glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, color_tex_semantics, 0);
+        glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, color_tex_3d, 0);
+        glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, depth_tex, 0);
+        glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+        glViewport(0, 0, 512, 512);
         GLenum *bufs = (GLenum*)malloc(4 * sizeof(GLenum));
         bufs[0] = GL_COLOR_ATTACHMENT0;
         bufs[1] = GL_COLOR_ATTACHMENT1;
@@ -543,6 +698,56 @@ public:
         return result;
     }
 
+    py::list compile_shader_meshrenderer_cubemap(char* vertexShaderSource, char* fragmentShaderSource, char* geometryShaderSource) {
+        int vertexShader = glCreateShader(GL_VERTEX_SHADER);
+        glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+        glCompileShader(vertexShader);
+        int success;
+        char infoLog[512];
+        glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+        if (!success)
+        {
+            glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+            std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
+        }
+        int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+        glCompileShader(fragmentShader);
+        glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+        if (!success)
+        {
+            glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+            std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << std::endl;
+        }
+        int geometryShader = glCreateShader(GL_GEOMETRY_SHADER);
+        glShaderSource(geometryShader, 1, &geometryShaderSource, NULL);
+        glCompileShader(geometryShader);
+        glGetShaderiv(geometryShader, GL_COMPILE_STATUS, &success);
+        if (!success)
+        {
+            glGetShaderInfoLog(geometryShader, 512, NULL, infoLog);
+            std::cout << "ERROR::SHADER::GEOMETRY::COMPILATION_FAILED\n" << infoLog << std::endl;
+        }
+        int shaderProgram = glCreateProgram();
+        glAttachShader(shaderProgram, vertexShader);
+        glAttachShader(shaderProgram, fragmentShader);
+        glAttachShader(shaderProgram, geometryShader);
+        glLinkProgram(shaderProgram);
+        glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+        if (!success) {
+            glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+            std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
+        }
+        glDeleteShader(vertexShader);
+        glDeleteShader(fragmentShader);
+        glDeleteShader(geometryShader);
+        int texUnitUniform = glGetUniformLocation(shaderProgram, "texUnit");
+        py::list result;
+        result.append(shaderProgram);
+        result.append(texUnitUniform);
+        return result;
+    }
+
     py::list load_object_meshrenderer(int shaderProgram, py::array_t<float> vertexData) {
         GLuint VAO;
         glGenVertexArrays(1, &VAO);
@@ -570,6 +775,30 @@ public:
         return result;
     }
 
+    py::list load_window_meshrenderer(int shaderProgram, py::array_t<float> vertexData) {
+        GLuint VAO;
+        glGenVertexArrays(1, &VAO);
+        glBindVertexArray(VAO);
+        GLuint VBO;
+        glGenBuffers(1, &VBO);
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        py::buffer_info buf = vertexData.request();
+        float* ptr = (float *) buf.ptr;
+        glBufferData(GL_ARRAY_BUFFER, vertexData.size()*sizeof(float), ptr, GL_STATIC_DRAW);
+        GLuint positionAttrib = glGetAttribLocation(shaderProgram, "position");
+        GLuint coordsAttrib = glGetAttribLocation(shaderProgram, "texCoords");
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(positionAttrib, 2, GL_FLOAT, GL_FALSE, 16, (void*)0);
+        glVertexAttribPointer(coordsAttrib, 2, GL_FLOAT, GL_TRUE, 16, (void*)8);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+        py::list result;
+        result.append(VAO);
+        result.append(VBO);
+        return result;
+    }
+
     void render_softbody_instance(int vao, int vbo, py::array_t<float> vertexData) {
         glBindVertexArray(vao);
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
@@ -588,7 +817,7 @@ public:
         float *rotptr = (float *) pose_rot.request().ptr;
         float *lightposptr = (float *) lightpos.request().ptr;
         float *lightcolorptr = (float *) lightcolor.request().ptr;
-        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "V"), 1, GL_TRUE, Vptr);
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "V"), 6, GL_TRUE, Vptr);
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "P"), 1, GL_FALSE, Pptr);
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "pose_trans"), 1, GL_FALSE, transptr);
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "pose_rot"), 1, GL_TRUE, rotptr);
@@ -611,7 +840,6 @@ public:
         glBindFramebuffer(GL_FRAMEBUFFER, fb);
         unsigned int *ptr = (unsigned int *) faces.request().ptr;
         glDrawElements(GL_TRIANGLES, face_size, GL_UNSIGNED_INT, ptr);
-
     }
 
     void initvar_instance_group(int shaderProgram, py::array_t<float> V, py::array_t<float> P, py::array_t<float> lightpos, py::array_t<float> lightcolor) {
@@ -721,13 +949,17 @@ PYBIND11_MODULE(MeshRendererContext, m) {
         pymodule.def("render_meshrenderer_post", &MeshRendererContext::render_meshrenderer_post, "post-executed functions in MeshRenderer.render");
         pymodule.def("getstring_meshrenderer", &MeshRendererContext::getstring_meshrenderer, "return GL version string");
         pymodule.def("readbuffer_meshrenderer", &MeshRendererContext::readbuffer_meshrenderer, "read pixel buffer");
+        pymodule.def("readbuffer_meshrenderer_cubemap", &MeshRendererContext::readbuffer_meshrenderer_cubemap, "read cubemap pixel buffer");
         pymodule.def("clean_meshrenderer", &MeshRendererContext::clean_meshrenderer, "clean meshrenderer");
         pymodule.def("setup_framebuffer_meshrenderer", &MeshRendererContext::setup_framebuffer_meshrenderer, "setup framebuffer in meshrenderer");
+        pymodule.def("setup_framebuffer_meshrenderer_cubemap", &MeshRendererContext::setup_framebuffer_meshrenderer_cubemap, "setup cubemap framebuffer in meshrenderer");
         pymodule.def("setup_framebuffer_meshrenderer_ms", &MeshRendererContext::setup_framebuffer_meshrenderer_ms, "setup framebuffer in meshrenderer with MSAA");
         pymodule.def("blit_buffer", &MeshRendererContext::blit_buffer, "blit buffer");
 
         pymodule.def("compile_shader_meshrenderer", &MeshRendererContext::compile_shader_meshrenderer, "compile vertex and fragment shader");
+        pymodule.def("compile_shader_meshrenderer_cubemap", &MeshRendererContext::compile_shader_meshrenderer_cubemap, "compile geometry, vertex and fragment shader");
         pymodule.def("load_object_meshrenderer", &MeshRendererContext::load_object_meshrenderer, "load object into VAO and VBO");
+        pymodule.def("load_window_meshrenderer", &MeshRendererContext::load_window_meshrenderer, "load window VAO and VBO");
         pymodule.def("loadTexture", &MeshRendererContext::loadTexture, "load texture function");
 
         // class MeshRendererG2G

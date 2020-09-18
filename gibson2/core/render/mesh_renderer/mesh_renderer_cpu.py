@@ -218,8 +218,34 @@ class Instance(object):
             # update buffer data into VBO
             self.renderer.r.render_softbody_instance(self.renderer.VAOs[object_idx], self.renderer.VBOs[object_idx], new_data)
 
+
+        print(self.renderer.target, self.renderer.camera)
+        v_array = [] # posZ, negZ
+        forward_dir = [self.renderer.target[0] - self.renderer.camera[0], self.renderer.target[1] - self.renderer.camera[1], self.renderer.target[2] - self.renderer.camera[2]]
+        target_array = [[self.renderer.camera[0] + forward_dir[0], self.renderer.camera[1] + forward_dir[1], self.renderer.camera[2]],
+                        [self.renderer.camera[0] - forward_dir[0], self.renderer.camera[1] - forward_dir[1], self.renderer.camera[2]],
+                        [self.renderer.camera[0] + forward_dir[0], self.renderer.camera[1], self.renderer.camera[2] - forward_dir[1]],
+                        [self.renderer.camera[0] - forward_dir[0], self.renderer.camera[1], self.renderer.camera[2] + forward_dir[1]],
+                        [self.renderer.camera[0] - forward_dir[1], self.renderer.camera[1] + forward_dir[0], self.renderer.camera[2]],
+                        [self.renderer.camera[0] + forward_dir[1], self.renderer.camera[1] - forward_dir[0], self.renderer.camera[2]]]
+        
+        up_array = [[ 0, 0, 1],
+                    [ 0, 0, 1],
+                    [-1, 0, 0],
+                    [ 1, 0, 0],
+                    [ 0, 0, 1],
+                    [ 0, 0, 1]]
+
+        for i in range(6):
+            _camera = self.renderer.camera
+            _target = target_array[i]
+            _up = up_array[i]
+            v_array.append(np.ascontiguousarray(lookat(_camera, _target, up=_up), dtype=np.float32))
+
+        V_array = np.ascontiguousarray(np.array(v_array), dtype=np.float32)
+        
         self.renderer.r.initvar_instance(self.renderer.shaderProgram,
-                                         self.renderer.V,
+                                         V_array,
                                          self.renderer.P,
                                          self.pose_trans,
                                          self.pose_rot,
@@ -305,9 +331,19 @@ class MeshRenderer(object):
         :param use_fisheye: use fisheye shader or not
         """
         self.shaderProgram = None
+        self.postShaderProgram = None
         self.fbo = None
+        self.fbo_post = None
+        self.window_VAO = None
+        self.window_VBO = None
+        self.window_vertices = [ 1.0,-1.0, 1.0, 0.0, 
+                                -1.0,-1.0, 0.0, 0.0,                         
+                                -1.0, 1.0, 0.0, 1.0, 
+                                 1.0, 1.0, 1.0, 1.0 ]
         self.color_tex_rgb, self.color_tex_normal, self.color_tex_semantics, self.color_tex_3d = None, None, None, None
+        self.color_tex_rgb_post, self.color_tex_normal_post, self.color_tex_semantics_post, self.color_tex_3d_post = None, None, None, None
         self.depth_tex = None
+        self.depth_tex_post = None
         self.VAOs = []
         self.VBOs = []
         self.textures = []
@@ -317,6 +353,7 @@ class MeshRenderer(object):
         self.shapes = []
 
         self.texUnitUniform = None
+        self.postTexUnitUniform = None
         self.width = width
         self.height = height
         self.faces = []
@@ -353,6 +390,14 @@ class MeshRenderer(object):
 
         logging.debug('Is using fisheye camera: {}'.format(self.fisheye))
 
+        [self.postShaderProgram, self.postTexUnitUniform] = self.r.compile_shader_meshrenderer(
+                        "".join(open(
+                            os.path.join(os.path.dirname(mesh_renderer.__file__),
+                                        'shaders/c2e_vert.shader')).readlines()),
+                        "".join(open(
+                            os.path.join(os.path.dirname(mesh_renderer.__file__),
+                                        'shaders/c2e_frag.shader')).readlines()))
+
         if self.fisheye:
             [self.shaderProgram, self.texUnitUniform] = self.r.compile_shader_meshrenderer(
                         "".join(open(
@@ -364,13 +409,26 @@ class MeshRenderer(object):
                                         'shaders/fisheye_frag.shader')).readlines()).replace(
                                             "FISHEYE_SIZE", str(self.width / 2)))
         else:
-            [self.shaderProgram, self.texUnitUniform] = self.r.compile_shader_meshrenderer(
+            [self.shaderProgram, self.texUnitUniform] = self.r.compile_shader_meshrenderer_cubemap(
                         "".join(open(
                             os.path.join(os.path.dirname(mesh_renderer.__file__),
                                         'shaders/vert.shader')).readlines()),
                         "".join(open(
                             os.path.join(os.path.dirname(mesh_renderer.__file__),
-                                        'shaders/frag.shader')).readlines()))
+                                        'shaders/frag.shader')).readlines()),
+                        "".join(open(
+                            os.path.join(os.path.dirname(mesh_renderer.__file__),
+                                        'shaders/geo.shader')).readlines()))
+            
+            # [self.shaderProgram, self.texUnitUniform] = self.r.compile_shader_meshrenderer(
+            #             "".join(open(
+            #                 os.path.join(os.path.dirname(mesh_renderer.__file__),
+            #                             'shaders/vert.shader')).readlines()),
+            #             "".join(open(
+            #                 os.path.join(os.path.dirname(mesh_renderer.__file__),
+            #                             'shaders/frag.shader')).readlines()))
+
+        [self.window_VAO, self.window_VBO] = self.r.load_window_meshrenderer(self.postShaderProgram, self.window_vertices)
 
         self.lightpos = [0, 0, 0]
         self.setup_framebuffer()
@@ -391,7 +449,13 @@ class MeshRenderer(object):
         Set up RGB, surface normal, depth and segmentation framebuffers for the renderer
         """
         [self.fbo, self.color_tex_rgb, self.color_tex_normal, self.color_tex_semantics, self.color_tex_3d,
-         self.depth_tex] = self.r.setup_framebuffer_meshrenderer(self.width, self.height)
+         self.depth_tex] = self.r.setup_framebuffer_meshrenderer_cubemap(self.width, self.height)
+
+        # [self.fbo, self.color_tex_rgb, self.color_tex_normal, self.color_tex_semantics, self.color_tex_3d,
+        #  self.depth_tex] = self.r.setup_framebuffer_meshrenderer(self.width, self.height)
+
+        [self.fbo_post, self.color_tex_rgb_post, self.color_tex_normal_post, self.color_tex_semantics_post, self.color_tex_3d_post,
+         self.depth_tex_post] = self.r.setup_framebuffer_meshrenderer(self.width, self.height)
 
         if self.msaa:
             [self.fbo_ms, self.color_tex_rgb_ms, self.color_tex_normal_ms, self.color_tex_semantics_ms, self.color_tex_3d_ms,
@@ -646,7 +710,8 @@ class MeshRenderer(object):
         for mode in modes:
             if mode not in ['rgb', 'normal', 'seg', '3d']:
                 raise Exception('unknown rendering mode: {}'.format(mode))
-            frame = self.r.readbuffer_meshrenderer(mode, self.width, self.height, self.fbo)
+            frame = self.r.readbuffer_meshrenderer_cubemap(mode, self.width, self.height, self.fbo_post)
+            # frame = self.r.readbuffer_meshrenderer(mode, self.width, self.height, self.fbo)
             frame = frame.reshape(self.height, self.width, 4)[::-1, :]
             results.append(frame)
         return results
@@ -669,7 +734,7 @@ class MeshRenderer(object):
             if not instance in hidden:
                 instance.render()
 
-        self.r.render_meshrenderer_post()
+        self.r.render_meshrenderer_post(self.postShaderProgram, self.color_tex_rgb, self.postTexUnitUniform, self.window_VAO, self.fbo_post)
         if self.msaa:
             self.r.blit_buffer(self.width, self.height, self.fbo_ms, self.fbo)
 
@@ -699,9 +764,10 @@ class MeshRenderer(object):
         """
         clean_list = [
             self.color_tex_rgb, self.color_tex_normal, self.color_tex_semantics, self.color_tex_3d,
-            self.depth_tex
+            self.depth_tex, self.color_tex_rgb_post, self.color_tex_normal_post, self.color_tex_semantics_post, self.color_tex_3d_post,
+            self.depth_tex_post
         ]
-        fbo_list = [self.fbo]
+        fbo_list = [self.fbo, self.fbo_post]
         if self.msaa:
             clean_list += [
             self.color_tex_rgb_ms, self.color_tex_normal_ms, self.color_tex_semantics_ms, self.color_tex_3d_ms,
@@ -714,8 +780,14 @@ class MeshRenderer(object):
         self.color_tex_normal = None
         self.color_tex_semantics = None
         self.color_tex_3d = None
+        self.depth_tex_post = None
+        self.color_tex_rgb_post = None
+        self.color_tex_normal_post = None
+        self.color_tex_semantics_post = None
+        self.color_tex_3d_post = None
         self.depth_tex = None
         self.fbo = None
+        self.fbo_post = None
         self.VAOs = []
         self.VBOs = []
         self.textures = []

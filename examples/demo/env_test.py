@@ -35,7 +35,7 @@ def main():
                 orn = nav_env.get_orientation()
                 qorn = Quaternion(array=np.roll(orn, 1))
                 next_qorn = new_orientation_from_dir(qorn, next_dir)
-                next_orn = np.array([next_qorn[1], next_qorn[2], next_qorn[3], next_qorn[0]])
+                next_orn = None # np.array([next_qorn[1], next_qorn[2], next_qorn[3], next_qorn[0]])
                 state, reward, done, info = nav_env.step((next_pos, next_orn))
                 if done:
                     logging.info("Episode finished after {} timesteps".format(i + 1))

@@ -1046,11 +1046,12 @@ class HotspotTravEnv(NavigateRandomEnv):
         if not (self.target_dist_min < dist < self.target_dist_max):
             print("WARNING: Failed to sample initial and target positions")
         
-        forward_vec = np.array([0.0, 1.0, 0.0])
-        predict_vec = np.array([path[5][0] - path[0][0], path[5][1] - path[0][1], 0.0])
-        rad = math.acos(np.dot(forward_vec, predict_vec / np.linalg.norm(predict_vec)))
-        quat = Quaternion(axis=(0.0, 0.0, 1.0), radians=rad)
-        self.initial_orn = np.array([0, 0, quat.radians])
+        # forward_vec = np.array([0.0, 1.0, 0.0])
+        # predict_vec = np.array([path[5][0] - path[0][0], path[5][1] - path[0][1], 0.0])
+        # rad = math.acos(np.dot(forward_vec, predict_vec / np.linalg.norm(predict_vec)))
+        # quat = Quaternion(axis=(0.0, 0.0, 1.0), radians=rad)
+        # self.initial_orn = np.array([0, 0, quat.radians])
+        self.initial_orn = np.array([0, 0, np.random.uniform(0, np.pi * 2)])
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
