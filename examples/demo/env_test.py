@@ -55,7 +55,7 @@ def new_orientation_from_dir(qorn, next_dir):
 
 
 def get_frame():
-    return (nav_env.simulator.viewer.frame * 255).astype(np.uint8)
+    return (nav_env.simulator.viewer.frame * 255)[:256, :].astype(np.uint8)
 
 def recorder_core(filename):
     res = (640, 480)
