@@ -83,6 +83,7 @@ class BuildingScene(Scene):
     """
     def __init__(self,
                  model_id,
+                 model_type='',
                  trav_map_resolution=0.1,
                  trav_map_erosion=2,
                  build_graph=True,
@@ -105,6 +106,7 @@ class BuildingScene(Scene):
         """
         logging.info("Building scene: {}".format(model_id))
         self.model_id = model_id
+        self.model_type = model_type
         self.trav_map_default_resolution = 0.01  # each pixel represents 0.01m
         self.trav_map_resolution = trav_map_resolution
         self.trav_map_original_size = None
@@ -138,7 +140,7 @@ class BuildingScene(Scene):
         else:
             filename = os.path.join(get_model_path(self.model_id), "mesh_z_up_downsampled.obj")
             if not os.path.isfile(filename):
-                filename = os.path.join(get_model_path(self.model_id), "mesh_z_up.obj")
+                filename = os.path.join(get_model_path(self.model_id), "mesh_z_up" + self.model_type + ".obj")
 
         collision_id = p.createCollisionShape(p.GEOM_MESH,
                                               fileName=filename,

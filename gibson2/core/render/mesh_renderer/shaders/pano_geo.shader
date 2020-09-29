@@ -35,9 +35,10 @@ void main() {
             gs_out.theCoords = gs_in[i].theCoords;
             gs_out.Normal = gs_in[i].Normal;
             gs_out.FragPos = gs_in[i].FragPos;
-            gs_out.Normal_cam = gs_in[i].Normal_cam;
+            gs_out.Normal_cam = normalize(gs_in[i].Normal_cam);
             gs_out.Instance_color = gs_in[i].Instance_color;
-            gs_out.Pos_cam = gs_in[i].Pos_cam;
+            vec4 pos_cam4 = V[layer] * gl_in[i].gl_Position;
+            gs_out.Pos_cam = pos_cam4.xyz / pos_cam4.w;
             gs_out.Diffuse_color = gs_in[i].Diffuse_color;
             gl_Position = P * V[layer] * gl_in[i].gl_Position;
             EmitVertex();

@@ -530,7 +530,7 @@ class NavigateEnv(BaseEnv):
         new_robot_position = self.robots[0].get_position()[:2]
         self.path_length += l2_distance(old_robot_position, new_robot_position)
 
-    def step_visualization(self):
+    def step_visualization(self, s_path = None):
         if self.mode != 'gui':
             return
 
@@ -539,6 +539,8 @@ class NavigateEnv(BaseEnv):
 
         if self.scene.build_graph:
             shortest_path, _ = self.get_shortest_path(entire_path=True)
+            if type(s_path) != type(None):
+                shortest_path = s_path
             floor_height = 0.0 if self.floor_num is None else self.scene.get_floor_height(self.floor_num)
             num_nodes = min(self.num_waypoints_vis, shortest_path.shape[0])
             for i in range(num_nodes):
@@ -933,8 +935,40 @@ class NavigateRandomEnvSim2Real(NavigateRandomEnv):
 
         return state
 
+class TravEnv(NavigateRandomEnv):
 
-class HotspotTravEnv(NavigateRandomEnv):
+    def get_orientation(self):
+        return self.robots[0].get_orientation()
+
+    def step(self, action):
+        """
+        apply robot's action and get state, reward, done and info, following OpenAI gym's convention
+        :param action: a list of control signals
+        :return: state, reward, done, info
+        """
+        self.current_step += 1
+        if action[0] is not None:
+            self.robots[0].set_position(action[0])
+
+        if action[1] is not None:
+            self.robots[0].set_orientation(action[1])
+
+        cache = self.before_simulation()
+        collision_links = self.run_simulation()
+        self.after_simulation(cache, collision_links)
+
+        state = self.get_state(collision_links)
+        info = {}
+        reward, info = self.get_reward(collision_links, action, info)
+        done, info = self.get_termination(collision_links, action, info)
+        # self.step_visualization()
+
+        if done and self.automatic_reset:
+            info['last_observation'] = state
+            state = self.reset()
+        return state, reward, done, info
+
+class HotspotTravEnv(TravEnv):
     def __init__(
             self,
             config_file,
@@ -994,37 +1028,6 @@ class HotspotTravEnv(NavigateRandomEnv):
         x, y = self.hotspots[floor][idx][1][0], self.hotspots[floor][idx][1][1]
         z = self.scene.floors[floor]
         return floor, np.array([x, y, z])
-
-    def get_orientation(self):
-        return self.robots[0].get_orientation()
-
-    def step(self, action):
-        """
-        apply robot's action and get state, reward, done and info, following OpenAI gym's convention
-        :param action: a list of control signals
-        :return: state, reward, done, info
-        """
-        self.current_step += 1
-        if action[0] is not None:
-            self.robots[0].set_position(action[0])
-
-        if action[1] is not None:
-            self.robots[0].set_orientation(action[1])
-
-        cache = self.before_simulation()
-        collision_links = self.run_simulation()
-        self.after_simulation(cache, collision_links)
-
-        state = self.get_state(collision_links)
-        info = {}
-        reward, info = self.get_reward(collision_links, action, info)
-        done, info = self.get_termination(collision_links, action, info)
-        self.step_visualization()
-
-        if done and self.automatic_reset:
-            info['last_observation'] = state
-            state = self.reset()
-        return state, reward, done, info
 
     def reset_initial_and_target_pos(self):
         """

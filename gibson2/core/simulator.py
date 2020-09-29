@@ -16,6 +16,7 @@ class Simulator:
     def __init__(self,
                  gravity=9.8,
                  timestep=1 / 240.0,
+                 render_pano=True,
                  use_fisheye=False,
                  mode='gui',
                  image_width=128,
@@ -65,6 +66,7 @@ class Simulator:
         self.image_height = image_height
         self.vertical_fov = vertical_fov
         self.device_idx = device_idx
+        self.render_pano = render_pano
         self.use_fisheye = use_fisheye
         self.render_to_tensor = render_to_tensor
         self.auto_sync = auto_sync
@@ -108,6 +110,7 @@ class Simulator:
                                          height=self.image_height,
                                          vertical_fov=self.vertical_fov,
                                          device_idx=self.device_idx,
+                                         render_pano=self.render_pano,
                                          use_fisheye=self.use_fisheye)
 
         print("******************PyBullet Logging Information:")

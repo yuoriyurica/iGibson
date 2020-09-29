@@ -38,6 +38,8 @@ class BaseEnv(gym.Env):
         self.physics_timestep = physics_timestep
         self.simulator = Simulator(mode=mode,
                                    timestep=physics_timestep,
+                                   gravity=self.config.get('gravity', 9.8),
+                                   render_pano=self.config.get('panorama', True),
                                    use_fisheye=self.config.get('fisheye', False),
                                    image_width=self.config.get('image_width', 128),
                                    image_height=self.config.get('image_height', 128),
@@ -78,6 +80,7 @@ class BaseEnv(gym.Env):
         elif self.config['scene'] == 'building':
             scene = BuildingScene(
                 self.config['model_id'],
+                self.config.get('model_type', ''),
                 waypoint_resolution=self.config.get('waypoint_resolution', 0.2),
                 num_waypoints=self.config.get('num_waypoints', 10),
                 build_graph=self.config.get('build_graph', False),

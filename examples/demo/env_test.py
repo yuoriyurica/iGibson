@@ -8,10 +8,15 @@ import logging
 import math
 import cv2 as cv
 import threading
-from pyquaternion import Quaternion
+from gibson2.utils.utils import quatToXYZW, quatFromXYZW
+from transforms3d.euler import euler2quat, quat2euler, euler2axangle, axangle2euler
+from transforms3d.quaternions import quat2mat, axangle2quat
+import io
+import json
+from scipy.interpolate import splev, splprep
 
 
-#logging.getLogger().setLevel(logging.DEBUG) #To increase the level of logging
+logging.getLogger().setLevel(logging.DEBUG) #To increase the level of logging
 
 def main():
     global recording
@@ -19,39 +24,66 @@ def main():
     config_filename = os.path.join(os.path.dirname(gibson2.__file__),
                                    '../examples/configs/turtlebot_demo.yaml')
     nav_env = HotspotTravEnv(config_file=config_filename, mode='gui')
-    for j in range(10):
+    for j in range(20):
         nav_env.reset()
         path = nav_env.get_shortest_path(entire_path=True)[0]
-        catmull_x, catmull_y = catmull_rom(path[:, 0], path[:, 1], 5)
-        print(len(path), len(catmull_x))
-        recording = True
-        # threading.Thread(target=recorder_core, args=(str(j) + '.avi',)).start()
-        for i in range(500):
-            with Profiler('Environment action step'):
-                pos = nav_env.get_position_of_interest()
-                next_pos = [catmull_x[i], catmull_y[i], pos[2]]
-                next_dir = np.array([next_pos[0] - pos[0], next_pos[1] - pos[1], 0.0])
 
-                orn = nav_env.get_orientation()
-                qorn = Quaternion(array=np.roll(orn, 1))
-                next_qorn = new_orientation_from_dir(qorn, next_dir)
-                next_orn = None # np.array([next_qorn[1], next_qorn[2], next_qorn[3], next_qorn[0]])
-                state, reward, done, info = nav_env.step((next_pos, next_orn))
-                if done:
-                    logging.info("Episode finished after {} timesteps".format(i + 1))
-                    break
+        s_data = np.array(sorted(path, key=lambda s : s[0]))
+        p_x = s_data[:, 0]
+        p_y = s_data[:, 1]
+
+        # s_x, s_y = catmull_rom(p_x, p_y, 5)
+        tck, u = splprep([p_x, p_y])
+        u = np.linspace(0, 1, 50)
+        s_x, s_y = np.array(splev(u, tck))
+        nav_env.step_visualization(np.array([[s_x[p], s_y[p]] for p in range(len(s_x))]))
+        # save_path(str(j) + '.json', path.tolist())
+        recording = True
+        threading.Thread(target=recorder_core, args=(str(j) + '.avi',)).start()
+        for i in range(len(s_x)):
+            # with Profiler('Environment action step'):
+            pos = nav_env.get_position_of_interest()
+            next_pos = [s_x[i], s_y[i], pos[2]]
+            next_dir = np.array([next_pos[0] - pos[0], next_pos[1] - pos[1]])
+            # print(next_pos)
+            orn = nav_env.get_orientation()
+            next_orn = new_orientation_from_dir(orn, next_dir)
+            state, reward, done, info = nav_env.step((next_pos, next_orn))
+            # sleep(1)
+            if done:
+                logging.info("Episode finished after {} timesteps".format(i + 1))
+                break
         recording = False
+
+def save_path(filePath, data):
+    with open(filePath, 'w') as outfile:
+        json.dump(data, outfile)
 
 def normalize(vec):
     return vec / np.linalg.norm(vec)
 
-def new_orientation_from_dir(qorn, next_dir):
-    initial_vec = np.array([0.0, 1.0, 0.0])
-    dir = qorn.rotate(initial_vec)
-    rad = math.acos(np.dot(normalize(dir), normalize(next_dir)))
-    final_rad = rad + qorn.radians - math.floor((rad + qorn.radians) / math.pi) * math.pi
-    print(final_rad - qorn.radians)
-    return Quaternion(axis=(0.0, 0.0, 1.0), radians=final_rad) if abs(final_rad - qorn.radians) < math.pi / 6 else qorn
+def new_orientation_from_dir(orn, next_dir):
+    # initial_vec = np.array([0, 1, 0])
+    # orn_matrix = quat2mat(quatFromXYZW(orn, 'wxyz'))
+    # dir = orn_matrix.dot(initial_vec.T).T
+    # rad = math.acos(np.dot(normalize(dir), normalize(next_dir)))
+
+    # orn_euler = quat2euler(quatFromXYZW(orn, 'wxyz'))
+    # vec, theta = euler2axangle(*orn_euler)
+    # next_orn_euler = axangle2euler(vec, theta + rad)
+    # next_orn = euler2quat(*next_orn_euler)
+
+    # # print(vec, rad, theta + rad)
+
+    # # return orn
+    # return quatToXYZW(next_orn, 'wxyz')
+
+    initial_dir = np.array([0, 1])
+    rad = np.arccos(np.dot(initial_dir, normalize(next_dir)))
+    # print(rad)
+    next_orn = quatToXYZW(axangle2quat(np.array([0, 0, 1]), rad, is_normalized=True), 'wxyz')
+
+    return next_orn
 
 
 def get_frame():

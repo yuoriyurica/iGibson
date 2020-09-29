@@ -366,14 +366,18 @@ public:
   
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_CUBE_MAP, texture_id);
-        // glBindTexture(GL_TEXTURE_2D, texture_id);
-
-        // float *ptr = (float*)malloc(4 * 512 * 512 * sizeof(float));
-        // glGetTexImage(GL_TEXTURE_CUBE_MAP_POSITIVE_X, 0, GL_RGBA, GL_FLOAT, ptr);
-        // std::cout << ptr[2] << '\n';
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, texture_id + 1);
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, texture_id + 2);
+        glActiveTexture(GL_TEXTURE3);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, texture_id + 3);
 
         glUseProgram(shaderProgram);
         glUniform1i(texUnitUniform, 0);
+        glUniform1i(glGetUniformLocation(shaderProgram, "texUnit1"), 1);
+        glUniform1i(glGetUniformLocation(shaderProgram, "texUnit2"), 2);
+        glUniform1i(glGetUniformLocation(shaderProgram, "texUnit3"), 3);
         glBindVertexArray(vao);
 
         glBindFramebuffer(GL_FRAMEBUFFER, fb2);
@@ -403,13 +407,6 @@ public:
         glBindFramebuffer(GL_FRAMEBUFFER, fb2);
         if (!strcmp(mode, "rgb")) {
             glReadBuffer(GL_COLOR_ATTACHMENT0);
-            
-            // py::array_t<float> data = py::array_t<float>(4 * width * height);
-            // py::buffer_info buf = data.request();
-            // float* ptr = (float *) buf.ptr;
-            // glBindTexture(GL_TEXTURE_2D, 1);
-            // glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, ptr);
-            // return data;
         }
         else if (!strcmp(mode, "normal")) {
             glReadBuffer(GL_COLOR_ATTACHMENT1);
@@ -425,31 +422,6 @@ public:
             exit(EXIT_FAILURE);
         }
         py::array_t<float> data = py::array_t<float>(4 * width * height);
-        py::buffer_info buf = data.request();
-        float* ptr = (float *) buf.ptr;
-        glReadPixels(0, 0, width, height, GL_RGBA, GL_FLOAT, ptr);
-        return data;
-    }
-
-    py::array_t<float> readbuffer_meshrenderer_cubemap(char* mode, int width, int height, GLuint fb2) {
-        glBindFramebuffer(GL_FRAMEBUFFER, fb2);
-        if (!strcmp(mode, "rgb")) {
-            glReadBuffer(GL_COLOR_ATTACHMENT0);
-        }
-        else if (!strcmp(mode, "normal")) {
-            glReadBuffer(GL_COLOR_ATTACHMENT1);
-        }
-        else if (!strcmp(mode, "seg")) {
-            glReadBuffer(GL_COLOR_ATTACHMENT2);
-        }
-        else if (!strcmp(mode, "3d")) {
-            glReadBuffer(GL_COLOR_ATTACHMENT3);
-        }
-        else {
-            fprintf(stderr, "ERROR: Unknown buffer mode.\n");
-            exit(EXIT_FAILURE);
-        }
-        py::array_t<float> data = py::array_t<float>(4 * width * height); // 4(RGBA) * width * height
         py::buffer_info buf = data.request();
         float* ptr = (float *) buf.ptr;
         glReadPixels(0, 0, width, height, GL_RGBA, GL_FLOAT, ptr);
@@ -551,7 +523,7 @@ public:
         glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
         for (int i = 0; i < 6; i++) {
-            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         }
         glBindTexture(GL_TEXTURE_CUBE_MAP, color_tex_normal);
         glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -560,7 +532,7 @@ public:
         glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
         for (int i = 0; i < 6; i++) {
-            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         }
         glBindTexture(GL_TEXTURE_CUBE_MAP, color_tex_semantics);
         glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -569,7 +541,7 @@ public:
         glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
         for (int i = 0; i < 6; i++) {
-            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         }
         glBindTexture(GL_TEXTURE_CUBE_MAP, color_tex_3d);
         glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -578,7 +550,7 @@ public:
         glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
         for (int i = 0; i < 6; i++) {
-            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, 512, 512, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         }
         glBindTexture(GL_TEXTURE_CUBE_MAP, depth_tex);
         glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -587,7 +559,7 @@ public:
         glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
         for (int i = 0; i < 6; i++) {
-            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_DEPTH24_STENCIL8, 512, 512, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_DEPTH24_STENCIL8, width, height, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
         }
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
         glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, color_tex_rgb, 0);
@@ -596,7 +568,7 @@ public:
         glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, color_tex_3d, 0);
         glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, depth_tex, 0);
         glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
-        glViewport(0, 0, 512, 512);
+        glViewport(0, 0, width, height);
         GLenum *bufs = (GLenum*)malloc(4 * sizeof(GLenum));
         bufs[0] = GL_COLOR_ATTACHMENT0;
         bufs[1] = GL_COLOR_ATTACHMENT1;
@@ -817,6 +789,22 @@ public:
         float *rotptr = (float *) pose_rot.request().ptr;
         float *lightposptr = (float *) lightpos.request().ptr;
         float *lightcolorptr = (float *) lightcolor.request().ptr;
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "V"), 1, GL_TRUE, Vptr);
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "P"), 1, GL_FALSE, Pptr);
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "pose_trans"), 1, GL_FALSE, transptr);
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "pose_rot"), 1, GL_TRUE, rotptr);
+        glUniform3f(glGetUniformLocation(shaderProgram, "light_position"), lightposptr[0], lightposptr[1], lightposptr[2]);
+        glUniform3f(glGetUniformLocation(shaderProgram, "light_color"), lightcolorptr[0], lightcolorptr[1], lightcolorptr[2]);
+    }
+
+    void initvar_instance_cubemap(int shaderProgram, py::array_t<float> V, py::array_t<float> P, py::array_t<float> pose_trans, py::array_t<float> pose_rot, py::array_t<float> lightpos, py::array_t<float> lightcolor) {
+        glUseProgram(shaderProgram);
+        float *Vptr = (float *) V.request().ptr;
+        float *Pptr = (float *) P.request().ptr;
+        float *transptr = (float *) pose_trans.request().ptr;
+        float *rotptr = (float *) pose_rot.request().ptr;
+        float *lightposptr = (float *) lightpos.request().ptr;
+        float *lightcolorptr = (float *) lightcolor.request().ptr;
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "V"), 6, GL_TRUE, Vptr);
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "P"), 1, GL_FALSE, Pptr);
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "pose_trans"), 1, GL_FALSE, transptr);
@@ -949,7 +937,6 @@ PYBIND11_MODULE(MeshRendererContext, m) {
         pymodule.def("render_meshrenderer_post", &MeshRendererContext::render_meshrenderer_post, "post-executed functions in MeshRenderer.render");
         pymodule.def("getstring_meshrenderer", &MeshRendererContext::getstring_meshrenderer, "return GL version string");
         pymodule.def("readbuffer_meshrenderer", &MeshRendererContext::readbuffer_meshrenderer, "read pixel buffer");
-        pymodule.def("readbuffer_meshrenderer_cubemap", &MeshRendererContext::readbuffer_meshrenderer_cubemap, "read cubemap pixel buffer");
         pymodule.def("clean_meshrenderer", &MeshRendererContext::clean_meshrenderer, "clean meshrenderer");
         pymodule.def("setup_framebuffer_meshrenderer", &MeshRendererContext::setup_framebuffer_meshrenderer, "setup framebuffer in meshrenderer");
         pymodule.def("setup_framebuffer_meshrenderer_cubemap", &MeshRendererContext::setup_framebuffer_meshrenderer_cubemap, "setup cubemap framebuffer in meshrenderer");
@@ -969,6 +956,7 @@ PYBIND11_MODULE(MeshRendererContext, m) {
         // class Instance
         pymodule.def("render_softbody_instance", &MeshRendererContext::render_softbody_instance, "render softbody in instance.render");
         pymodule.def("initvar_instance", &MeshRendererContext::initvar_instance, "init uniforms in instance.render");
+        pymodule.def("initvar_instance_cubemap", &MeshRendererContext::initvar_instance_cubemap, "init pano shader uniforms in instance.render");
         pymodule.def("init_material_instance", &MeshRendererContext::init_material_instance, "init materials in instance.render");
         pymodule.def("draw_elements_instance", &MeshRendererContext::draw_elements_instance, "draw elements in instance.render and instancegroup.render");
 

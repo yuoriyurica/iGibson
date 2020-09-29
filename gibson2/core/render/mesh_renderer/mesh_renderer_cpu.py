@@ -219,7 +219,7 @@ class Instance(object):
             self.renderer.r.render_softbody_instance(self.renderer.VAOs[object_idx], self.renderer.VBOs[object_idx], new_data)
 
 
-        print(self.renderer.camera, self.renderer.target, self.renderer.up)
+        # print(self.renderer.camera, self.renderer.target, self.renderer.up)
         v_array = [] # posZ, negZ
         forward_dir = [self.renderer.target[0] - self.renderer.camera[0], self.renderer.target[1] - self.renderer.camera[1], self.renderer.target[2] - self.renderer.camera[2]]
         target_array = [[self.renderer.camera[0] + forward_dir[1], self.renderer.camera[1] - forward_dir[0], self.renderer.camera[2]],
@@ -248,13 +248,22 @@ class Instance(object):
 
         V_array = np.ascontiguousarray(np.array(v_array), dtype=np.float32)
         
-        self.renderer.r.initvar_instance(self.renderer.shaderProgram,
-                                         V_array,
-                                         self.renderer.P,
-                                         self.pose_trans,
-                                         self.pose_rot,
-                                         self.renderer.lightpos,
-                                         self.renderer.lightcolor)
+        if self.renderer.pano:
+            self.renderer.r.initvar_instance_cubemap(self.renderer.shaderProgram,
+                                            V_array,
+                                            self.renderer.P,
+                                            self.pose_trans,
+                                            self.pose_rot,
+                                            self.renderer.lightpos,
+                                            self.renderer.lightcolor)
+        else:
+            self.renderer.r.initvar_instance(self.renderer.shaderProgram,
+                                        self.renderer.V,
+                                        self.renderer.P,
+                                        self.pose_trans,
+                                        self.pose_rot,
+                                        self.renderer.lightpos,
+                                        self.renderer.lightcolor)
 
         for object_idx in self.object.VAO_ids:
             self.renderer.r.init_material_instance(self.renderer.shaderProgram,
@@ -326,7 +335,7 @@ class MeshRenderer(object):
     MeshRenderer is a lightweight OpenGL renderer. It manages a set of visual objects, and instances of those objects.
     It also manage a device to create OpenGL context on, and create buffers to store rendering results.
     """
-    def __init__(self, width=512, height=512, vertical_fov=90, device_idx=0, use_fisheye=False, msaa=False):
+    def __init__(self, width=512, height=512, vertical_fov=90, device_idx=0, render_pano=True, use_fisheye=False, msaa=False):
         """
         :param width: width of the renderer output
         :param height: width of the renderer output
@@ -362,6 +371,7 @@ class MeshRenderer(object):
         self.height = height
         self.faces = []
         self.instances = []
+        self.pano = render_pano
         self.fisheye = use_fisheye
         # self.context = glcontext.Context()
         # self.context.create_opengl_context((self.width, self.height))
@@ -413,24 +423,25 @@ class MeshRenderer(object):
                                         'shaders/fisheye_frag.shader')).readlines()).replace(
                                             "FISHEYE_SIZE", str(self.width / 2)))
         else:
-            [self.shaderProgram, self.texUnitUniform] = self.r.compile_shader_meshrenderer_cubemap(
-                        "".join(open(
-                            os.path.join(os.path.dirname(mesh_renderer.__file__),
-                                        'shaders/vert.shader')).readlines()),
-                        "".join(open(
-                            os.path.join(os.path.dirname(mesh_renderer.__file__),
-                                        'shaders/frag.shader')).readlines()),
-                        "".join(open(
-                            os.path.join(os.path.dirname(mesh_renderer.__file__),
-                                        'shaders/geo.shader')).readlines()))
-            
-            # [self.shaderProgram, self.texUnitUniform] = self.r.compile_shader_meshrenderer(
-            #             "".join(open(
-            #                 os.path.join(os.path.dirname(mesh_renderer.__file__),
-            #                             'shaders/vert.shader')).readlines()),
-            #             "".join(open(
-            #                 os.path.join(os.path.dirname(mesh_renderer.__file__),
-            #                             'shaders/frag.shader')).readlines()))
+            if self.pano:
+                [self.shaderProgram, self.texUnitUniform] = self.r.compile_shader_meshrenderer_cubemap(
+                            "".join(open(
+                                os.path.join(os.path.dirname(mesh_renderer.__file__),
+                                            'shaders/pano_vert.shader')).readlines()),
+                            "".join(open(
+                                os.path.join(os.path.dirname(mesh_renderer.__file__),
+                                            'shaders/pano_frag.shader')).readlines()),
+                            "".join(open(
+                                os.path.join(os.path.dirname(mesh_renderer.__file__),
+                                            'shaders/pano_geo.shader')).readlines()))
+            else:
+                [self.shaderProgram, self.texUnitUniform] = self.r.compile_shader_meshrenderer(
+                            "".join(open(
+                                os.path.join(os.path.dirname(mesh_renderer.__file__),
+                                            'shaders/vert.shader')).readlines()),
+                            "".join(open(
+                                os.path.join(os.path.dirname(mesh_renderer.__file__),
+                                            'shaders/frag.shader')).readlines()))
 
         [self.window_VAO, self.window_VBO] = self.r.load_window_meshrenderer(self.postShaderProgram, self.window_vertices)
 
@@ -452,11 +463,13 @@ class MeshRenderer(object):
         """
         Set up RGB, surface normal, depth and segmentation framebuffers for the renderer
         """
-        [self.fbo, self.color_tex_rgb, self.color_tex_normal, self.color_tex_semantics, self.color_tex_3d,
-         self.depth_tex] = self.r.setup_framebuffer_meshrenderer_cubemap(self.width, self.height)
 
-        # [self.fbo, self.color_tex_rgb, self.color_tex_normal, self.color_tex_semantics, self.color_tex_3d,
-        #  self.depth_tex] = self.r.setup_framebuffer_meshrenderer(self.width, self.height)
+        if self.pano:
+            [self.fbo, self.color_tex_rgb, self.color_tex_normal, self.color_tex_semantics, self.color_tex_3d,
+            self.depth_tex] = self.r.setup_framebuffer_meshrenderer_cubemap(self.width, self.height)
+        else:
+            [self.fbo, self.color_tex_rgb, self.color_tex_normal, self.color_tex_semantics, self.color_tex_3d,
+            self.depth_tex] = self.r.setup_framebuffer_meshrenderer(self.width, self.height)
 
         [self.fbo_post, self.color_tex_rgb_post, self.color_tex_normal_post, self.color_tex_semantics_post, self.color_tex_3d_post,
          self.depth_tex_post] = self.r.setup_framebuffer_meshrenderer(self.width, self.height)
@@ -714,8 +727,11 @@ class MeshRenderer(object):
         for mode in modes:
             if mode not in ['rgb', 'normal', 'seg', '3d']:
                 raise Exception('unknown rendering mode: {}'.format(mode))
-            frame = self.r.readbuffer_meshrenderer_cubemap(mode, self.width, self.height, self.fbo_post)
-            # frame = self.r.readbuffer_meshrenderer(mode, self.width, self.height, self.fbo)
+            # _cubemap
+            if self.pano:
+                frame = self.r.readbuffer_meshrenderer(mode, self.width, self.height, self.fbo_post)
+            else:
+                frame = self.r.readbuffer_meshrenderer(mode, self.width, self.height, self.fbo)
             frame = frame.reshape(self.height, self.width, 4)[::-1, :]
             results.append(frame)
         return results
