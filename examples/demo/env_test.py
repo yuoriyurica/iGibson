@@ -13,10 +13,40 @@ from transforms3d.euler import euler2quat, quat2euler, euler2axangle, axangle2eu
 from transforms3d.quaternions import quat2mat, axangle2quat
 import io
 import json
-from scipy.interpolate import splev, splprep
-
+from scipy.interpolate import splev, splprep, Rbf, InterpolatedUnivariateSpline, CubicSpline, interp1d
+from CatmullRomSpline import CatmullRomChain, RecursiveCatmullRomChain
+from geomdl import BSpline, fitting
 
 logging.getLogger().setLevel(logging.DEBUG) #To increase the level of logging
+
+def smooth_filter(p_x, p_y):
+    size = 2 # filter range
+    
+    x = []
+    y = []
+    for i in range(size):
+        x.append(p_x[i])
+        y.append(p_y[i])
+
+    for i in range(size, len(p_x) - size, 1):
+        new_x = 0
+        new_y = 0
+        for j in range(size * 2 + 1):
+            idx = j - size
+            new_x += p_x[i + idx]
+            new_y += p_y[i + idx]
+
+        new_x /= (size * 2 + 1)
+        new_y /= (size * 2 + 1)
+
+        x.append(new_x)
+        y.append(new_y)
+
+    for i in range(size):
+        idx = i - size
+        x.append(p_x[idx])
+        y.append(p_y[idx])
+    return np.array(x), np.array(y)
 
 def main():
     global recording
@@ -26,20 +56,57 @@ def main():
     nav_env = HotspotTravEnv(config_file=config_filename, mode='gui')
     for j in range(20):
         nav_env.reset()
-        path = nav_env.get_shortest_path(entire_path=True)[0]
+        path, dist = nav_env.get_shortest_path(entire_path=True)
+        print(dist)
 
-        s_data = np.array(sorted(path, key=lambda s : s[0]))
-        p_x = s_data[:, 0]
-        p_y = s_data[:, 1]
+        p_x = path[:, 0]
+        p_y = path[:, 1]
+        p_t = np.arange(len(p_x))
 
-        # s_x, s_y = catmull_rom(p_x, p_y, 5)
-        tck, u = splprep([p_x, p_y])
-        u = np.linspace(0, 1, 50)
-        s_x, s_y = np.array(splev(u, tck))
+        c = CatmullRomChain(path)
+        s_x, s_y = zip(*c)
+
+        # tck_x, u_x = splprep([p_t, p_x], k=5)
+        # tck_y, u_y = splprep([p_t, p_y], k=5)
+        # u = np.linspace(0, 1, 100)
+        # _, s_x = np.array(splev(u, tck_x))
+        # _, s_y = np.array(splev(u, tck_y))
+
+        # rbf_x = Rbf(p_t, p_x)
+        # rbf_y = Rbf(p_t, p_y)
+        # u = np.linspace(0, len(p_t), 99)
+        # s_x = rbf_x(u)
+        # s_y = rbf_y(u)
+
+        # ius_x = InterpolatedUnivariateSpline(p_t, p_x)
+        # ius_y = InterpolatedUnivariateSpline(p_t, p_y)
+        # u = np.linspace(0, len(p_t), 99)
+        # s_x = ius_x(u)
+        # s_y = ius_y(u)
+
+        f_x = interp1d(p_t, p_x)
+        f_y = interp1d(p_t, p_y)
+        _u = np.linspace(0, p_t[-1], len(p_t) * 1)
+        # _p_x, _p_y = smooth_filter(f_x(_u), f_y(_u))
+        _p_x, _p_y = smooth_filter(np.array(s_x), np.array(s_y))
+
+        _p_t = np.arange(len(_p_x))
+        cs_x = CubicSpline(_p_t, _p_x)
+        cs_y = CubicSpline(_p_t, _p_y)
+        u = np.linspace(0, _p_t[-1], int(dist * 30))
+        s_x = cs_x(u)
+        s_y = cs_y(u)
+
+        # crv = fitting.interpolate_curve(path.tolist(), 5)
+        # u = np.linspace(0, 1, 100)
+        # pts = np.array(crv.evaluate_list(u))
+        # s_x = pts[:, 0]
+        # s_y = pts[:, 1]
+
         nav_env.step_visualization(np.array([[s_x[p], s_y[p]] for p in range(len(s_x))]))
-        # save_path(str(j) + '.json', path.tolist())
         recording = True
-        threading.Thread(target=recorder_core, args=(str(j) + '.avi',)).start()
+        # threading.Thread(target=recorder_core, args=(os.path.join(os.path.dirname(gibson2.__file__), '../examples/captures', 'bs'+str(j) + '.avi'),)).start()
+        # save_path(str(j) + '.json', path.tolist())
         for i in range(len(s_x)):
             # with Profiler('Environment action step'):
             pos = nav_env.get_position_of_interest()
@@ -50,7 +117,7 @@ def main():
             next_orn = new_orientation_from_dir(orn, next_dir)
             state, reward, done, info = nav_env.step((next_pos, next_orn))
             # sleep(1)
-            if done:
+            if i == len(s_x) - 1:
                 logging.info("Episode finished after {} timesteps".format(i + 1))
                 break
         recording = False
@@ -63,23 +130,14 @@ def normalize(vec):
     return vec / np.linalg.norm(vec)
 
 def new_orientation_from_dir(orn, next_dir):
-    # initial_vec = np.array([0, 1, 0])
-    # orn_matrix = quat2mat(quatFromXYZW(orn, 'wxyz'))
-    # dir = orn_matrix.dot(initial_vec.T).T
-    # rad = math.acos(np.dot(normalize(dir), normalize(next_dir)))
+    initial_dir = np.array([1, 0])
+    cos = np.dot(initial_dir, normalize(next_dir))
+    sin = np.cross(initial_dir, normalize(next_dir))
+    rad = np.arccos(cos)
+    
+    if sin < 0:
+        rad = -rad
 
-    # orn_euler = quat2euler(quatFromXYZW(orn, 'wxyz'))
-    # vec, theta = euler2axangle(*orn_euler)
-    # next_orn_euler = axangle2euler(vec, theta + rad)
-    # next_orn = euler2quat(*next_orn_euler)
-
-    # # print(vec, rad, theta + rad)
-
-    # # return orn
-    # return quatToXYZW(next_orn, 'wxyz')
-
-    initial_dir = np.array([0, 1])
-    rad = np.arccos(np.dot(initial_dir, normalize(next_dir)))
     # print(rad)
     next_orn = quatToXYZW(axangle2quat(np.array([0, 0, 1]), rad, is_normalized=True), 'wxyz')
 
@@ -87,10 +145,13 @@ def new_orientation_from_dir(orn, next_dir):
 
 
 def get_frame():
-    return (nav_env.simulator.viewer.frame * 255)[:256, :].astype(np.uint8)
+    return (nav_env.simulator.viewer.frame * 255).astype(np.uint8)
+
+def get_clipped(frame):
+    return get_frame()[:256, :]
 
 def recorder_core(filename):
-    res = (640, 480)
+    res = (512, 512)
     fps = 20.0
     # DIVX(.avi) / XVID
     fourcc = cv.VideoWriter_fourcc(*'DIVX')
@@ -100,78 +161,6 @@ def recorder_core(filename):
         out.write(frame)
         sleep(1 / fps)
     out.release()
-
-def catmull_rom(p_x, p_y, res):
-    """Computes Catmull-Rom Spline for given support points and resolution.
-    Args:
-        p_x: array of x-coords
-        p_y: array of y-coords
-        res: resolution of a segment (including the start point, but not the
-            endpoint of the segment)
-    """
-    # create arrays for spline points
-    x_intpol = np.empty(res*(len(p_x)-1) + 1)
-    y_intpol = np.empty(res*(len(p_x)-1) + 1)
-
-    # set the last x- and y-coord, the others will be set in the loop
-    x_intpol[-1] = p_x[-1]
-    y_intpol[-1] = p_y[-1]
-
-    # loop over segments (we have n-1 segments for n points)
-    for i in range(len(p_x)-1):
-        # set x-coords
-        x_intpol[i*res:(i+1)*res] = np.linspace(
-            p_x[i], p_x[i+1], res, endpoint=False)
-        if i == 0:
-            # need to estimate an additional support point before the first
-            y_intpol[:res] = np.array([
-                catmull_rom_one_point(
-                    x,
-                    p_y[0] - (p_y[1] - p_y[0]), # estimated start point,
-                    p_y[0],
-                    p_y[1],
-                    p_y[2])
-                for x in np.linspace(0.,1.,res, endpoint=False)])
-        elif i == len(p_x) - 2:
-            # need to estimate an additional support point after the last
-            y_intpol[i*res:-1] = np.array([
-                catmull_rom_one_point(
-                    x,
-                    p_y[i-1],
-                    p_y[i],
-                    p_y[i+1],
-                    p_y[i+1] + (p_y[i+1] - p_y[i]) # estimated end point
-                ) for x in np.linspace(0.,1.,res, endpoint=False)])
-        else:
-            y_intpol[i*res:(i+1)*res] = np.array([
-                catmull_rom_one_point(
-                    x,
-                    p_y[i-1],
-                    p_y[i],
-                    p_y[i+1],
-                    p_y[i+2]) for x in np.linspace(0.,1.,res, endpoint=False)])
-
-
-    return (x_intpol, y_intpol)
-
-def catmull_rom_one_point(x, v0, v1, v2, v3):
-    """Computes interpolated y-coord for given x-coord using Catmull-Rom.
-    Computes an interpolated y-coordinate for the given x-coordinate between
-    the support points v1 and v2. The neighboring support points v0 and v3 are
-    used by Catmull-Rom to ensure a smooth transition between the spline
-    segments.
-    Args:
-        x: the x-coord, for which the y-coord is needed
-        v0: 1st support point
-        v1: 2nd support point
-        v2: 3rd support point
-        v3: 4th support point
-    """
-    c1 = 1. * v1
-    c2 = -.5 * v0 + .5 * v2
-    c3 = 1. * v0 + -2.5 * v1 + 2. * v2 -.5 * v3
-    c4 = -.5 * v0 + 1.5 * v1 + -1.5 * v2 + .5 * v3
-    return (((c4 * x + c3) * x + c2) * x + c1)
 
 if __name__ == "__main__":
     main()
