@@ -19,7 +19,7 @@ double pi = 3.141592653589793;
 double pi2 = 6.283185307179587;
 
 void main() {
-    vec2 coords = vec2(fs_in.texcoord.x - 0.5, fs_in.texcoord.y * 2 - 0.5);
+    vec2 coords = vec2(fs_in.texcoord.x - 0.5, 1.5 - fs_in.texcoord.y * 2);
     vec2 uv = vec2(coords.x * pi2, coords.y * pi);
     vec3 e2cCoords = vec3(cos(uv.y) * sin(uv.x), sin(uv.y), cos(uv.y) * cos(uv.x));
     outputColour = texture(texUnit, e2cCoords);
